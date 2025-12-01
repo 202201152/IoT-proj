@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IoT Air Monitor & Regulator Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #222;
+            color: white;
+            text-align: center;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 50px;
+        }
+
+        .card {
+            background: #333;
+            width: 250px;
+            margin: 15px;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            border-top: 5px solid #00bc8c;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: #aaa;
+        }
+
+        .val {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .unit {
+            font-size: 1rem;
+            color: #aaa;
+        }
+
+        #status {
+            margin-top: 20px;
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        #relay_status_card {
+            border-color: #2ecc71;
+        }
+
+        #relay_status {
+            font-size: 2.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🏠 Environmental Regulator Dashboard</h1>
+    <div id="status">Connecting to backend...</div>
+
+    <div class="container">
+        <div class="card" style="border-color: #e74c3c;">
+            <h2>Temperature</h2>
+            <div class="val"><span id="temp">--</span></div>
+            <div class="unit">Celsius (°C)</div>
+        </div>
+        <div class="card" style="border-color: #3498db;">
+            <h2>Humidity</h2>
+            <div class="val"><span id="hum">--</span></div>
+            <div class="unit">Percent (%)</div>
+        </div>
+        <div class="card" style="border-color: #f1c40f;">
+            <h2>Gas (MQ-135)</h2>
+            <div class="val"><span id="air">--</span></div>
+            <div class="unit">Analog Value</div>
+        </div>
+        <!-- <div class="card" id="relay_status_card">
+            <h2>Fan/Actuator State</h2>
+            <div class="val"><span id="relay_status">--</span></div>
+            <div class="unit">Automatic/Manual</div>
+        </div> -->
+    </div>
+
+    <script>
+        // If frontend and backend are served from same origin, keep location.origin.
+        // Otherwise set to the backend origin, e.g. "http://localhost:3000" or "http://192.168.1.50:3000"
+        const API_BASE = 'http://localhost:3000';
+        const LATEST_URL = `${API_BASE}/api/air/latest`;
+
+        const statusEl = document.getElementById("status");
+        const tempEl = document.getElementById("temp");
+        const humEl = document.getElementById("hum");
+        const airEl = document.getElementById("air");
+        // const relayEl = document.getElementById("relay_status");
+        // const relayCard = document.getElementById("relay_status_card");
+
+        let pollingIntervalMs = 2000; // 2s. Increase to 5000+ for less load.
+
+        async function fetchAndUpdate() {
+            try {
+                const res = await fetch(LATEST_URL, { cache: "no-store" });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                const temp = Number(data.temperature);
+                const hum = Number(data.humidity);
+                const co2 = data.co2_eq_ppm ?? data.co2 ?? null;
+
+                tempEl.innerText = Number.isFinite(temp) ? temp.toFixed(1) : "--";
+                humEl.innerText = Number.isFinite(hum) ? hum.toFixed(1) : "--";
+                airEl.innerText = co2 != null ? co2 : "--";
+
+                // relay_pin is optional — show ON/OFF/— if missing
+                // relayEl.innerText = data.relay_pin === 1 ? "ON" : (data.relay_pin === 0 ? "OFF" : "—");
+                // relayCard.style.borderColor = relayEl.innerText === "ON" ? "#e74c3c" : "#2ecc71";
+
+                if (data.timestamp) {
+                    statusEl.innerHTML = `🟢 Connected — last update ${new Date(data.timestamp).toLocaleString()}`;
+                    statusEl.style.color = "#2ecc71";
+                } else {
+                    statusEl.innerHTML = `🟠 Connected — waiting for first data`;
+                    statusEl.style.color = "#f39c12";
+                }
+            } catch (err) {
+                console.error("Fetch error:", err);
+                statusEl.innerHTML = `🔴 Backend unreachable: ${err.message}`;
+                statusEl.style.color = "#e74c3c";
+                tempEl.innerText = humEl.innerText = airEl.innerText = "--";
+                // relayEl.innerText = "--";
+            }
+        }
+
+        // initial + periodic
+        fetchAndUpdate();
+        setInterval(fetchAndUpdate, pollingIntervalMs);
+    </script>
+</body>
+
+</html>
